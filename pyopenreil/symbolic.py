@@ -140,9 +140,7 @@ class SymVal(Sym):
     def __eq__(self, other):
 
         if type(other) == SymAny: return True
-        if type(other) != SymVal: return False
-
-        return self.name == other.name
+        return False if type(other) != SymVal else self.name == other.name
 
     def __hash__(self):
 
@@ -157,14 +155,12 @@ class SymPtr(Sym):
 
     def __str__(self):
 
-        return '*' + str(self.val)
+        return f'*{str(self.val)}'
 
     def __eq__(self, other):
 
         if type(other) == SymAny: return True
-        if type(other) != SymPtr: return False
-
-        return self.val == other.val
+        return False if type(other) != SymPtr else self.val == other.val
 
     def __hash__(self):
 
@@ -190,9 +186,7 @@ class SymConst(Sym):
     def __eq__(self, other):
 
         if type(other) == SymAny: return True
-        if type(other) != SymConst: return False
-
-        return self.val == other.val
+        return False if type(other) != SymConst else self.val == other.val
 
     def __hash__(self):
 
@@ -229,7 +223,7 @@ class SymIP(Sym):
 
     def __eq__(self, other):
 
-        return type(other) == SymAny or type(other) == SymIP
+        return type(other) in [SymAny, SymIP]
 
     def __hash__(self):
 
@@ -244,8 +238,7 @@ class SymCond(Sym):
 
     def __str__(self):
 
-        return '(%s) ? %s : %s' % (str(self.cond), \
-               str(self.true), str(self.false))
+        return f'({str(self.cond)}) ? {str(self.true)} : {str(self.false)}'
 
     def __eq__(self, other):
 
@@ -288,7 +281,7 @@ class SymExp(Sym):
 
         if self.b is not None:
 
-            return '(' + str(self.a) + ' ' + op_str + ' ' + str(self.b) + ')'
+            return f'({str(self.a)} {op_str} {str(self.b)})'
 
         else:
 
@@ -377,7 +370,7 @@ class SymState(object):
 
     def __iter__(self):
 
-        for val, exp in self.state: yield val, exp
+        yield from self.state
 
     def __str__(self):
 
@@ -423,10 +416,9 @@ class SymState(object):
 
         def visitor(val):
 
-            if isinstance(val, SymVal) or \
-               isinstance(val, SymPtr):
+            if isinstance(val, (SymVal, SymPtr)):
 
-                if not val in ret: ret.append(val)
+                if val not in ret: ret.append(val)
 
             return val
 
@@ -477,7 +469,7 @@ class SymState(object):
 
         for val, exp in self:
 
-            if len(val_out) > 0 and not val in val_out: 
+            if len(val_out) > 0 and val not in val_out: 
 
                 # remove expression of unnecessary output value
                 self.clear(val)

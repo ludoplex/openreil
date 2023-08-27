@@ -79,14 +79,14 @@ class ReadError(StorageError):
 
     def __str__(self):
 
-        return 'Error while reading instruction %s' % hex(self.addr)
+        return f'Error while reading instruction {hex(self.addr)}'
 
 
 class ParseError(Error):
 
     def __str__(self):
 
-        return 'Error while deserializing instruction %s' % hex(self.addr)
+        return f'Error while deserializing instruction {hex(self.addr)}'
 
 
 def get_arch(arch):
@@ -136,11 +136,10 @@ class Arg(object):
 
     def __str__(self):
 
-        mkstr = lambda val: '%s:%s' % (val, self.size_name())
+        mkstr = lambda val: f'{val}:{self.size_name()}'
 
         if self.type == A_NONE:    return ''
-        elif self.type == A_REG:   return mkstr(self.name)
-        elif self.type == A_TEMP:  return mkstr(self.name)
+        elif self.type in [A_REG, A_TEMP]:   return mkstr(self.name)
         elif self.type == A_CONST: return mkstr('%x' % self.get_val())
         elif self.type == A_LOC:   return '%x.%.2x' % self.val
 
@@ -161,7 +160,7 @@ class Arg(object):
     def is_var(self):
 
         # check for temporary or target architecture register
-        return self.type == A_REG or self.type == A_TEMP
+        return self.type in [A_REG, A_TEMP]
 
     def size_name(self):
 
@@ -177,15 +176,14 @@ class Arg(object):
     def unserialize(self, data):
 
         if len(data) == 3:
-      
+          
             self.type, self.size = Arg_type(data), Arg_size(data)
 
             if self.size not in [ U1, U8, U16, U32, U64 ]:
 
                 return False
-            
-            if self.type == A_REG:     self.name = Arg_name(data)
-            elif self.type == A_TEMP:  self.name = Arg_name(data)
+
+            if self.type in [A_REG, A_TEMP]:     self.name = Arg_name(data)
             elif self.type == A_CONST: self.val = Arg_val(data)
             else: 
 
@@ -214,7 +212,7 @@ class Arg(object):
 
     def to_symbolic(self, insn, in_state = None):
 
-        if self.type == A_REG or self.type == A_TEMP:
+        if self.type in [A_REG, A_TEMP]:
 
             name = self.name
             if self.type == A_TEMP:
@@ -323,7 +321,7 @@ class Insn(object):
 
             mnem, args = self.get_attr(IATTR_ASM)
 
-            ret += ('; asm: %s %s' % (mnem, args)).strip()
+            ret += f'; asm: {mnem} {args}'.strip()
 
             if self.op == I_UNK:
 
@@ -333,13 +331,13 @@ class Insn(object):
 
                 if len(src) > 0 or len(dst) > 0:
 
-                    info = []
                     to_str = lambda arg: Arg_name(arg)
 
+                    info = []
                     if len(src) > 0: info.append('reads: ' + ', '.join(map(to_str, src)))
                     if len(dst) > 0: info.append('writes: ' + ', '.join(map(to_str, dst)))
 
-                    ret += ' -- %s' % '; '.join(info)
+                    ret += f" -- {'; '.join(info)}"
 
             ret += '\n'
 
@@ -355,8 +353,8 @@ class Insn(object):
         if show_hdr: ret += ';\n'
 
         return ret + '%.8x.%.2x %7s %16s, %16s, %16s' % \
-               (self.addr, self.inum, self.op_name(), \
-                self.a, self.b, self.c)
+                   (self.addr, self.inum, self.op_name(), \
+                    self.a, self.b, self.c)
 
     def op_name(self):
 
@@ -464,8 +462,7 @@ class Insn(object):
             if cond(self.a): ret.append(self.a)
             if cond(self.b): ret.append(self.b)
 
-            if (self.op == I_JCC or self.op == I_STM) and \
-               cond(self.c): ret.append(self.c)
+            if self.op in [I_JCC, I_STM] and cond(self.c): ret.append(self.c)
 
         if self.op == I_UNK and self.has_attr(IATTR_DST):
 
@@ -480,7 +477,7 @@ class Insn(object):
         out_state = SymState() if in_state is None else in_state.clone()
 
         # skip instructions that doesn't update output state
-        if not self.op in [ I_NONE, I_UNK ]:
+        if self.op not in [I_NONE, I_UNK]:
 
             # convert instruction arguments to symbolic expressions
             a = self.a.to_symbolic(self, out_state)
@@ -489,15 +486,11 @@ class Insn(object):
 
             # move a value to the register
             if self.op == I_STR: out_state.update(c, a)
-
-            # memory read/write
             elif self.op == I_STM: out_state.update_mem_w(c, a, self.a.size)
-            elif self.op == I_LDM: out_state.update_mem_r(c, a, self.c.size)            
-
-            # jump
+            elif self.op == I_LDM: out_state.update_mem_r(c, a, self.c.size)
             elif self.op == I_JCC:
 
-                if not self.c.type in [ A_CONST, A_LOC ]:
+                if self.c.type not in [A_CONST, A_LOC]:
 
                     c = out_state.get(c)
 
@@ -519,7 +512,6 @@ class Insn(object):
                     # conditional
                     out_state.update(SymIP(), SymCond(a, true, false))
 
-            # other instructions
             else: out_state.update(c, a.to_exp(self.op, b))
 
         return out_state
@@ -726,30 +718,25 @@ class InsnJson():
             attr[IATTR_BIN] = base64.b64encode(attr[IATTR_BIN])
 
         # JSON doesn't support numeric keys
-        attr = [ (key, val) for key, val in attr.items() ]
+        attr = list(attr.items())
 
         return json.dumps(( ( Insn_addr(insn), Insn_size(insn) ), \
-                            Insn_inum(insn), Insn_op(insn), Insn_args(insn), attr ))
+                                Insn_inum(insn), Insn_op(insn), Insn_args(insn), attr ))
 
     def from_json(self, data):                
 
-        attr_new = {}
-
         # make serialized argument from json data
         arg = lambda a: ( Arg_type(a), \
-                          Arg_size(a), \
-                          Arg_val(a) if Arg_type(a) == A_CONST else Arg_name(a) ) if len(a) > 0 else ()
-        
+                              Arg_size(a), \
+                              Arg_val(a) if Arg_type(a) == A_CONST else Arg_name(a) ) if len(a) > 0 else ()
+
         insn = json.loads(data)
         attr = Insn_attr(insn)
         args = ( arg(Insn_args(insn)[0]), \
-                 arg(Insn_args(insn)[1]), \
-                 arg(Insn_args(insn)[2]) )
-        
-        for key, val in attr: 
+                     arg(Insn_args(insn)[1]), \
+                     arg(Insn_args(insn)[2]) )
 
-            attr_new[key] = val
-
+        attr_new = dict(attr)
         if attr_new.has_key(IATTR_BIN): 
 
             # get instruction binary data from base64
@@ -757,7 +744,7 @@ class InsnJson():
 
         # return raw instruction data
         return ( ( Insn_addr(insn), Insn_size(insn) ), \
-                 Insn_inum(insn), Insn_op(insn), args, attr_new ) 
+                     Insn_inum(insn), Insn_op(insn), args, attr_new ) 
 
 
 class TestInsnJson(unittest.TestCase):
@@ -812,7 +799,7 @@ class InsnList(list):
         first = first if isinstance(first, tuple) else ( first, None )
 
         # query one machine instruction if last wasn't specified
-        last = last if last is None else last
+        last = last
         last = last if isinstance(last, tuple) else ( last, None )        
 
         ret, start = [], False
@@ -828,7 +815,7 @@ class InsnList(list):
             if start: ret.append(insn)
 
             if addr == last or \
-               (last[1] is None and addr[0] == last[0] and insn.has_flag(IOPT_ASM_END)):
+                   (last[1] is None and addr[0] == last[0] and insn.has_flag(IOPT_ASM_END)):
 
                 # end of the range
                 break
@@ -1113,30 +1100,30 @@ class Func(InsnList):
 
     def add_bb(self, bb):
 
-        if not bb in self.bb_list:
+        if bb in self.bb_list:
+            return
+        if bb.ir_addr == ( self.addr, 0 ):
 
-            if bb.ir_addr == ( self.addr, 0 ):
+            # set first instructin of the func
+            self.first = bb.first
 
-                # set first instructin of the func
-                self.first = bb.first
-
-            if bb.last.has_flag(IOPT_RET):
+        if bb.last.has_flag(IOPT_RET):
 
                 # set last instruction of the func
-                if not bb.last in self.last: self.last.append(bb.last)    
+            if bb.last not in self.last: self.last.append(bb.last)    
 
-                # update number of stack arguments
-                insn_list = bb.get_range(bb.last.addr)
-                self.stack_args = self._get_stack_args_count(insn_list)
+            # update number of stack arguments
+            insn_list = bb.get_range(bb.last.addr)
+            self.stack_args = self._get_stack_args_count(insn_list)
 
-            # update code chunks and basic blocks information
-            self.add_chunk(bb.first.addr, bb.size)
-            self.bb_list.append(bb) 
-            
-            for insn in bb:
+        # update code chunks and basic blocks information
+        self.add_chunk(bb.first.addr, bb.size)
+        self.bb_list.append(bb) 
+
+        for insn in bb:
 
                 # add bb instruction to func instructions list
-                if not insn in self: self.append(insn)            
+            if insn not in self: self.append(insn)            
 
     def name(self):
 
@@ -1181,11 +1168,7 @@ class GraphNode(object):
 
     def _find_edge(self, edges, name):
 
-        for edge in edges:
-
-            if edge.name == name: return edge
-
-        return None
+        return next((edge for edge in edges if edge.name == name), None)
 
     def key(self):
 
@@ -1327,12 +1310,13 @@ class Graph(object):
             for edge in self.edges:
 
                 name, attr = str(edge), {}
-                if len(name) > 0: attr['label'] = '"%s"' % name
+                if name != "":
+                    attr['label'] = f'"{name}"'
 
                 attr = ' '.join(map(lambda a: '%s=%s' % a, attr.items()))
 
                 if edge.node_from.present_in_dot_graph() and \
-                   edge.node_to.present_in_dot_graph():
+                       edge.node_to.present_in_dot_graph():
 
                     fd.write('%d -> %d [%s];\n' % (nodes.index(edge.node_from),
                                                    nodes.index(edge.node_to), attr))
@@ -1388,7 +1372,7 @@ class CFGraphNode(GraphNode):
 
     def text(self):
 
-        return '%s - %s' % (self.item.first.ir_addr(), self.item.last.ir_addr())
+        return f'{self.item.first.ir_addr()} - {self.item.last.ir_addr()}'
 
 
 class CFGraphEdge(GraphEdge):
@@ -1482,7 +1466,7 @@ class CFGraphBuilder(object):
         stack, nodes, edges = [], [], []
         cfg = CFGraph()
 
-        ir_addr = ir_addr if isinstance(ir_addr, tuple) else (ir_addr, None)        
+        ir_addr = ir_addr if isinstance(ir_addr, tuple) else (ir_addr, None)
         state = {} if state is None else state        
 
         def _process_node(bb, state, context):
@@ -1514,21 +1498,21 @@ class CFGraphBuilder(object):
 
                 _process_edge(( bb.ir_addr, rhs ))
 
-                if not rhs in nodes:
-                    
+                if rhs not in nodes:
+
                     stack.append(( rhs, state.copy() ))
 
             if lhs is not None: 
 
                 _process_edge(( bb.ir_addr, lhs ))
                 stack.append(( lhs, state.copy() ))
-            
+
             try: ir_addr, state = stack.pop()
             except IndexError: break
 
         # add processed edges to the CFG
         for edge in edges: cfg.add_edge(*edge)
-            
+
         return cfg
 
 
@@ -1575,17 +1559,11 @@ class DFGraphNode(GraphNode):
 
     def __str__(self):
 
-        return '%s %s' % (self.key(), self.item.op_name())
+        return f'{self.key()} {self.item.op_name()}'
 
     def present_in_dot_graph(self):
 
-        if self.item is not None and \
-           self.item.has_flag(IOPT_ELIMINATED):
-
-            # don't show DFG nodes of eliminated instructions
-            return False
-
-        return True
+        return self.item is None or not self.item.has_flag(IOPT_ELIMINATED)
 
     def key(self):
 
@@ -1634,7 +1612,7 @@ class DFGraphEdge(GraphEdge):
 
     def __repr__(self):
 
-        return '<DFG edge "%s">' % self.name
+        return f'<DFG edge "{self.name}">'
 
 
 class DFGraph(Graph):    
@@ -2095,12 +2073,12 @@ class DFGraphBuilder(object):
         for var, insn in state.items():
 
             ir_addr = insn.ir_addr()
-            
+
             if not bb.input.has_key(var): 
 
                 bb.input[var] = Set()
 
-            if not ir_addr in bb.input[var]: 
+            if ir_addr not in bb.input[var]: 
 
                 bb.input[var].add(ir_addr)
                 updated = True
@@ -2180,7 +2158,7 @@ class DFGraphBuilder(object):
 
         stack = []
         state = {} if state is None else state
-        
+
         ir_addr = ir_addr if isinstance(ir_addr, tuple) else (ir_addr, 0)                
 
         dfg = DFGraph()
@@ -2190,19 +2168,11 @@ class DFGraphBuilder(object):
 
             bb = cfg.node(ir_addr).item
 
-            # process basic block and update current state
-            updated = self._process_bb(bb, state, dfg) 
-
-            #
-            # Process immediate postdominators of basic block untill it's
-            # input state information keeps updating.
-            #
-            if updated:
-
-                lhs, rhs = bb.get_successors()                
-                if rhs is not None: stack.append(( rhs, state.copy() ))                  
+            if updated := self._process_bb(bb, state, dfg):
+                lhs, rhs = bb.get_successors()
+                if rhs is not None: stack.append(( rhs, state.copy() ))
                 if lhs is not None: stack.append(( lhs, state.copy() ))
-            
+
             try: ir_addr, state = stack.pop()
             except IndexError: break         
 
@@ -2669,7 +2639,7 @@ class CodeStorageTranslator(CodeStorage):
 
         assert arg.size in [ None, U1, U8, U16, U32, U64 ]
 
-        if arg.type == A_REG or arg.type == A_TEMP:
+        if arg.type in [A_REG, A_TEMP]:
 
             assert _is_num(arg.size)
             assert _is_str(arg.name)
@@ -2692,14 +2662,12 @@ class CodeStorageTranslator(CodeStorage):
             assert _is_tup(arg.val) and len(arg.val) == 2
             assert _is_num(arg.val[0]) and _is_num(arg.val[1])
 
-        elif arg.type == A_NONE: pass
-
-        else: assert False
+        elif arg.type != A_NONE: assert False
 
     def is_valid_insn(self, insn):
 
         _is_none = lambda arg: arg.type == A_NONE
-        _is_temp = lambda arg: arg.type == A_TEMP or arg.type == A_REG
+        _is_temp = lambda arg: arg.type in [A_TEMP, A_REG]
         _is_const = lambda arg: arg.type == A_CONST
         _is_loc = lambda arg: arg.type == A_LOC        
 
@@ -2734,9 +2702,9 @@ class CodeStorageTranslator(CodeStorage):
             assert _is_temp(insn.c) or _is_const(insn.c)
 
         elif insn.op in [ I_EQ,  I_LT, \
-                          I_ADD, I_SUB, I_SHL, I_SHR, \
-                          I_MUL, I_DIV, I_MOD, I_SMUL, I_SDIV, I_SMOD, \
-                          I_AND, I_OR,  I_XOR ]:
+                              I_ADD, I_SUB, I_SHL, I_SHR, \
+                              I_MUL, I_DIV, I_MOD, I_SMUL, I_SDIV, I_SMOD, \
+                              I_AND, I_OR,  I_XOR ]:
 
             assert _is_temp(insn.a) or _is_const(insn.a)
             assert _is_temp(insn.b) or _is_const(insn.b)
@@ -2749,24 +2717,22 @@ class CodeStorageTranslator(CodeStorage):
             assert _is_temp(insn.c) or _is_loc(insn.c)
 
         else: assert False
-        
+
         # check for valid arguments size
-        if (_is_temp(insn.a) or _is_const(insn.a)) and \
-           (_is_temp(insn.b) or _is_const(insn.b)):                        
+        if (_is_temp(insn.a) or _is_const(insn.a)):
+            if _is_temp(insn.b) or _is_const(insn.b):                        
 
-            assert insn.a.size == insn.b.size
+                assert insn.a.size == insn.b.size
 
-            if insn.op in [ I_EQ, I_LT ]:
+                if insn.op in [ I_EQ, I_LT ]:
 
-                assert insn.c.size == U1
+                    assert insn.c.size == U1
 
-            elif insn.op != I_OR:
+                elif insn.op != I_OR:
 
-                assert insn.a.size == insn.b.size == insn.c.size
+                    assert insn.a.size == insn.b.size == insn.c.size
 
-        elif (_is_temp(insn.a) or _is_const(insn.a)):
-
-            if insn.op == I_LDM:
+            elif insn.op == I_LDM:
 
                 assert insn.a.size == U32
                 assert insn.c.size != U1
@@ -2776,7 +2742,7 @@ class CodeStorageTranslator(CodeStorage):
                 assert insn.a.size != U1
                 assert insn.c.size == U32
 
-            elif not insn.op in [ I_JCC, I_UNK ]:
+            elif insn.op not in [I_JCC, I_UNK]:
 
                 assert insn.a.size == insn.c.size
 
@@ -2789,9 +2755,7 @@ class CodeStorageTranslator(CodeStorage):
         assert first.has_attr(IATTR_BIN) and first.has_attr(IATTR_ASM)
         assert last.has_flag(IOPT_ASM_END)
 
-        inum = 0
-
-        for insn in insn_list:
+        for inum, insn in enumerate(insn_list):
 
             insn = insn if isinstance(insn, Insn) else Insn(insn)
 
@@ -2801,7 +2765,6 @@ class CodeStorageTranslator(CodeStorage):
 
             # more instruction checks
             self.is_valid_insn(insn)
-            inum += 1
 
     def optimize(self, addr_list):
 
@@ -2873,7 +2836,7 @@ class CodeStorageTranslator(CodeStorage):
         attr = Insn_attr(insn_list[0])
 
         # check for IR code of xchg instruction
-        if not (attr.has_key(IATTR_ASM) and attr[IATTR_ASM][0] == 'xchg'):
+        if not attr.has_key(IATTR_ASM) or attr[IATTR_ASM][0] != 'xchg':
 
             return insn_list
 
@@ -2893,9 +2856,11 @@ class CodeStorageTranslator(CodeStorage):
 
                 remove = True
 
-                if isinstance(node, DFGraphEntryNode) or \
-                   isinstance(node, DFGraphExitNode) or \
-                   node.item.op == I_STM or node in removed:
+                if (
+                    isinstance(node, (DFGraphEntryNode, DFGraphExitNode))
+                    or node.item.op == I_STM
+                    or node in removed
+                ):
 
                     continue
 
@@ -2907,7 +2872,7 @@ class CodeStorageTranslator(CodeStorage):
                         continue
 
                     if edge.name.find('R_') == 0 or \
-                       not isinstance(edge.node_to, DFGraphExitNode):
+                           not isinstance(edge.node_to, DFGraphExitNode):
 
                         remove = False
                         break
@@ -2930,7 +2895,7 @@ class CodeStorageTranslator(CodeStorage):
         # rebuild final instructions list
         for insn in insn_list:
 
-            if not insn.ir_addr() in removed:
+            if insn.ir_addr() not in removed:
 
                 insn.inum = inum
                 inum += 1
@@ -2961,22 +2926,19 @@ class CodeStorageTranslator(CodeStorage):
                 if attr.has_key(IATTR_ASM): unk_insn.set_attr(IATTR_ASM, attr[IATTR_ASM])
                 if attr.has_key(IATTR_BIN): unk_insn.set_attr(IATTR_BIN, attr[IATTR_BIN])
 
-            if Insn_op(insn) == I_UNK:
-
-                args = Insn_args(insn)
-                a, c = Arg(args[0]), Arg(args[2])
-
-                if a.type != A_NONE: src.append(a.serialize())
-                if c.type != A_NONE: dst.append(c.serialize())
-
-                unk_insn.size = Insn_size(insn)
-
-            else:
-
+            if Insn_op(insn) != I_UNK:
                 return insn_list
 
-        if len(src) > 0: unk_insn.set_attr(IATTR_SRC, src)
-        if len(dst) > 0: unk_insn.set_attr(IATTR_DST, dst)
+            args = Insn_args(insn)
+            a, c = Arg(args[0]), Arg(args[2])
+
+            if a.type != A_NONE: src.append(a.serialize())
+            if c.type != A_NONE: dst.append(c.serialize())
+
+            unk_insn.size = Insn_size(insn)
+
+        if src: unk_insn.set_attr(IATTR_SRC, src)
+        if dst: unk_insn.set_attr(IATTR_DST, dst)
 
         return [ unk_insn.serialize() ]    
 

@@ -34,7 +34,7 @@ given installation ID.
 
 file_dir = os.path.abspath(os.path.dirname(__file__))
 reil_dir = os.path.abspath(os.path.join(file_dir, '..'))
-if not reil_dir in sys.path: sys.path = [ reil_dir ] + sys.path
+if reil_dir not in sys.path: sys.path = [ reil_dir ] + sys.path
 
 from pyopenreil.REIL import *
 from pyopenreil.symbolic import *
@@ -92,8 +92,8 @@ class Val(object):
 
                 a, b = exp.a, exp.b
 
-                assert isinstance(a, SymVal) or isinstance(a, SymConst)
-                assert b is None or isinstance(b, SymVal) or isinstance(b, SymConst)
+                assert isinstance(a, (SymVal, SymConst))
+                assert b is None or isinstance(b, (SymVal, SymConst))
                 assert b is None or a.size == b.size                
 
                 a = a if a is None else _z3_exp(a, a.size)
@@ -169,10 +169,10 @@ class Mem(VM.Mem):
 
         if val.is_symbolic():
 
-            for i in range(self.map_length[size]):
-
-                ret.append(self._Val(size, seed, exp = val.exp))
-
+            ret.extend(
+                self._Val(size, seed, exp=val.exp)
+                for _ in range(self.map_length[size])
+            )
         else:
 
             ret = map(lambda val: self._Val(size, seed, val), 
@@ -256,20 +256,16 @@ class Reg(VM.Reg):
 
     def to_symbolic(self):
 
-        # get symbolic representation of register contents
         if self.val.is_concrete():
-
             # use concrete value
             return SymConst(self.get_val(), self.size)
 
-        else:
+        if self.regs_map.has_key(self.name):
 
-            if self.regs_map.has_key(self.name):
+            return SymVal(self.regs_map[self.name], self.size)
 
-                return SymVal(self.regs_map[self.name], self.size)
-
-            # use symbolic value
-            return SymVal(self.name, self.size) if self.val.exp is None \
+        # use symbolic value
+        return SymVal(self.name, self.size) if self.val.exp is None \
                                                 else self.val.exp    
 
     def get_val(self):
@@ -353,13 +349,15 @@ class Cpu(VM.Cpu):
 
         if a.val.is_symbolic():
 
-            raise Exception('I_JCC with symbolic condition at ' + 
-                            '%s, giving up' % str(insn.ir_addr()))
+            raise Exception(
+                f'I_JCC with symbolic condition at {str(insn.ir_addr())}, giving up'
+            )
 
         elif c is not None and c.val.is_symbolic():
 
-            raise Exception('I_JCC with symbolic location at ' + 
-                            '%s, giving up' % str(insn.ir_addr()))
+            raise Exception(
+                f'I_JCC with symbolic location at {str(insn.ir_addr())}, giving up'
+            )
         else:
 
             return super(Cpu, self).insn_jcc(insn, a, b, c)
@@ -367,26 +365,22 @@ class Cpu(VM.Cpu):
     def insn_stm(self, insn, a, b, c):
 
         if c.val.is_symbolic():
-
-            raise Exception('I_STM with symbolic write address at ' + 
-                            '%s, giving up' % str(insn.ir_addr()))
-        else:
-
-            # store a to memory
-            self.mem.store(c.get_val(), insn.a.size, a.val)
-            return None
+            raise Exception(
+                f'I_STM with symbolic write address at {str(insn.ir_addr())}, giving up'
+            )
+        # store a to memory
+        self.mem.store(c.get_val(), insn.a.size, a.val)
+        return None
 
     def insn_ldm(self, insn, a, b, c):
 
         if a.val.is_symbolic():
-
-            raise Exception('I_LDM with symbolic read address at ' + 
-                            '%s, giving up' % str(insn.ir_addr()))
-        else:
-
-            # read from memory to c
-            self.reg(insn.c, self.mem.load(a.get_val(), insn.c.size))
-            return None
+            raise Exception(
+                f'I_LDM with symbolic read address at {str(insn.ir_addr())}, giving up'
+            )
+        # read from memory to c
+        self.reg(insn.c, self.mem.load(a.get_val(), insn.c.size))
+        return None
 
     def execute(self, insn):        
 

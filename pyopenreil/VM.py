@@ -11,28 +11,28 @@ class MemError(Error):
 
     def __str__(self):
 
-        return 'Error while acessing memory at address %s' % hex(self.addr)
+        return f'Error while acessing memory at address {hex(self.addr)}'
 
 
 class MemReadError(MemError):
 
     def __str__(self):
 
-        return 'Error while reading memory at address %s' % hex(self.addr)
+        return f'Error while reading memory at address {hex(self.addr)}'
 
 
 class MemWriteError(MemError):
 
     def __str__(self):
 
-        return 'Error while writing memory at address %s' % hex(self.addr)
+        return f'Error while writing memory at address {hex(self.addr)}'
 
 
 class MemNullPointerError(MemError):
 
     def __str__(self):
 
-        return 'NULL pointer access detected at address %s' % hex(self.addr)
+        return f'NULL pointer access detected at address {hex(self.addr)}'
 
 
 class CpuError(Error):
@@ -186,7 +186,7 @@ class Mem(object):
 
         if addr is not None: self._is_valid_addr(addr)
 
-        size = len(data) if size is None and not data is None else size
+        size = len(data) if size is None and data is not None else size
         addr = self.alloc_addr(size) if addr is None else addr
 
         for i in range(0, size):
@@ -449,7 +449,7 @@ class Cpu(object):
 
         if isinstance(name, Arg):
 
-            assert not name.type in [ A_NONE, A_CONST ]
+            assert name.type not in [ A_NONE, A_CONST ]
 
             # find register by instruction argument
             name, size, temp = name.name, name.size, name.type == A_TEMP          
@@ -460,10 +460,10 @@ class Cpu(object):
             size = self.arch.size if size is None else size
             temp = False
 
-        if not name[:2] in [ 'R_', 'V_' ]:
+        if name[:2] not in ['R_', 'V_']:
 
             # make canonical register name
-            name = '%s_%s' % ( 'V' if temp else 'R', name.upper() )
+            name = f"{'V' if temp else 'R'}_{name.upper()}"
 
         if self.regs.has_key(name): 
 
@@ -505,14 +505,7 @@ class Cpu(object):
         # return address of the next instruction to execute if condition was taken
         if a.get_val() != 0:
             
-            if insn.c.type == A_LOC:
-
-                return insn.c.val
-
-            else:
-
-                return ( c.get_val(), 0 )
-
+            return insn.c.val if insn.c.type == A_LOC else (c.get_val(), 0)
         else:
 
             return None
@@ -573,14 +566,14 @@ class Cpu(object):
 
         # get arguments values
         a, b, c = self.arg(insn.a), self.arg(insn.b), self.arg(insn.c)
-        
-        if not insn.op in REIL_INSN:
+
+        if insn.op not in REIL_INSN:
 
             # invalid opcode
             raise CpuInstructionError(insn.addr, insn.inum)
 
         try:
-            
+
             return {
 
                 I_NONE: self.insn_none,
@@ -938,13 +931,13 @@ class Abi(object):
 
     def ms_fastcall(self, addr, *args):
 
-        if len(args) > 0:
+        if args:
 
             self.reg('ecx', self.makearg(args[0]))
             args = args[1:]
 
         if len(args) > 0:
-        
+
             self.reg('edx', self.makearg(args[0]))
             args = args[1:]
 
@@ -952,13 +945,13 @@ class Abi(object):
 
     def arm_call(self, addr, *args):
 
-        if len(args) > 0:
+        if args:
 
             self.reg('r0', self.makearg(args[0]))
             args = args[1:]
 
         if len(args) > 0:
-        
+
             self.reg('r1', self.makearg(args[0]))
             args = args[1:]
 
@@ -968,7 +961,7 @@ class Abi(object):
             args = args[1:]
 
         if len(args) > 0:
-        
+
             self.reg('r3', self.makearg(args[0]))
             args = args[1:]
 
