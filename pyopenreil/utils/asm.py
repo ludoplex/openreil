@@ -77,8 +77,9 @@ class CompilerGas(object):
         ret = None
 
         # dump code section into file using objcopy
-        code = os.system('%s -O binary -j %s "%s" "%s"' % \
-               (self.objcopy_path, self.code_section, self.prog_obj, self.prog_bin))        
+        code = os.system(
+            f'{self.objcopy_path} -O binary -j {self.code_section} "{self.prog_obj}" "{self.prog_bin}"'
+        )        
 
         if code != 0: raise OSError('%s error %d' % (self.objcopy_path, code))
 
@@ -203,24 +204,16 @@ class CompilerGas(object):
         if self.is_mac:
 
             # on OS X we need to specify target architecture manually
-            options += [ '-arch %s' % self.arch_name ]
-        
+            options += [f'-arch {self.arch_name}']
+
         # generate object file
-        code = os.system('%s "%s" -o "%s" %s' % \
-               (self.as_path, path, self.prog_obj, ' '.join(options)))
+        code = os.system(
+            f"""{self.as_path} "{path}" -o "{self.prog_obj}" {' '.join(options)}"""
+        )
 
         if code != 0: raise OSError('%s error %d' % (self.as_path, code))
 
-        if self.is_mac:
-
-            # on OS X we need to use otool to dump code section
-            ret = self.prog_read_otool()
-
-        else:
-
-            # on other operating systems we using objcopy
-            ret = self.prog_read_objcopy() 
-
+        ret = self.prog_read_otool() if self.is_mac else self.prog_read_objcopy()
         os.unlink(self.prog_obj)
 
         return ret
@@ -276,8 +269,7 @@ class CompilerNasm(object):
 
     def compile_file(self, path):
         
-        code = os.system('%s %s -o %s' % \
-               (self.nasm_path, path, self.prog_dst))        
+        code = os.system(f'{self.nasm_path} {path} -o {self.prog_dst}')        
 
         if code != 0: raise OSError('nasm error %d' % code)
 

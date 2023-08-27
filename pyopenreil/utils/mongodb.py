@@ -56,11 +56,11 @@ class CodeStorageMongo(REIL.CodeStorageMem):
             if arg.type == REIL.A_NONE:  
 
                 return ()
-            
+
             elif arg.type == REIL.A_CONST:
 
                 return ( arg.type, arg.size, _U64IN(arg.val) )
-            
+
             else:
 
                 return ( arg.type, arg.size, arg.name )
@@ -71,13 +71,13 @@ class CodeStorageMongo(REIL.CodeStorageMem):
             insn.set_attr(REIL.IATTR_BIN, base64.b64encode(insn.get_attr(REIL.IATTR_BIN)))
 
         # JSON doesn't support numeric keys
-        attr = [ (key, val) for key, val in insn.attr.items() ]
+        attr = list(insn.attr.items())
 
         return {
 
             'addr': _U64IN(insn.addr), 'size': insn.size, 'inum': insn.inum, 'op': insn.op, \
-            'a': _arg_in(insn.a), 'b': _arg_in(insn.b), 'c': _arg_in(insn.c), \
-            'attr': attr
+                'a': _arg_in(insn.a), 'b': _arg_in(insn.b), 'c': _arg_in(insn.c), \
+                'attr': attr
         }
 
     def _insn_from_item(self, item):
@@ -128,34 +128,26 @@ class CodeStorageMongo(REIL.CodeStorageMem):
 
         # get item from collection
         insn = self._find(ir_addr)
-        if insn is not None: 
-
-            insn = self._insn_from_item(insn)
-
-            # update cache
-            self.cache[ir_addr] = insn
-
-            return insn
-
-        else:
-
+        if insn is None:
             raise REIL.StorageError(*ir_addr)
+        insn = self._insn_from_item(insn)
+
+        # update cache
+        self.cache[ir_addr] = insn
+
+        return insn
 
     def _del_insn(self, ir_addr):
 
         insn = self._find(ir_addr)
-        if insn is not None: 
-
-            # remove item from collection
-            self.collection.remove(self._get_key(ir_addr))
-
-            # remove item from cache
-            try: del self.cache[ir_addr]
-            except KeyError: pass
-
-        else:
-
+        if insn is None:
             raise REIL.StorageError(*ir_addr)
+        # remove item from collection
+        self.collection.remove(self._get_key(ir_addr))
+
+        # remove item from cache
+        try: del self.cache[ir_addr]
+        except KeyError: pass
 
     def _put_insn(self, insn):
 

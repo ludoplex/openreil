@@ -30,13 +30,10 @@ REIL_NAMES_ARG = [ 'NONE', 'REG', 'TEMP', 'CONST', 'LOC' ]
 def create_globals(items, list_name, prefix):
 
     items_list = globals()[list_name] = []
-    num = 0
-
-    for it in items:
+    for num, it in enumerate(items):
 
         globals()[prefix + str(it)] = num
         items_list.append(num)
-        num += 1
 
 # create global constants for REIL opcodes, sizes and argument types
 create_globals(REIL_NAMES_INSN, 'REIL_INSN', 'I_')

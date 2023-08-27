@@ -26,10 +26,10 @@ class Reader(REIL.Reader):
                 # get REIL arch by file arch
                 # FIXME: check for arm as well
                 self.arch = { pybfd.bfd.ARCH_I386: REIL.ARCH_X86 }[ self.bfd.architecture ]
-            
+
             except KeyError:
 
-                raise Exception('Unsupported architecture %s' % self.bfd.architecture_name)
+                raise Exception(f'Unsupported architecture {self.bfd.architecture_name}')
 
         super(REIL.Reader, self).__init__()
 
